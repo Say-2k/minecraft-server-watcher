@@ -38,15 +38,15 @@ func (t *TelegramNotifier) OnStart(ctx context.Context) {
 	if t == nil || t.bot == nil {
 		return
 	}
-	timer := time.NewTimer(5 * time.Minute)
 	log.Println("Сообщение через 5 минут будет обновлено на", SERV_START)
 	msg := tgbotapi.NewEditMessageText(t.chatID, t.messageID, SERV_STARTING)
 	t.sendEdit(msg)
 
 	select {
 	case <-ctx.Done():
+		log.Println("Контекст отменен до обновления сообщения на", SERV_START)
 		return
-	case <-timer.C:
+	case <-time.After(5 * time.Minute):
 		msg := tgbotapi.NewEditMessageText(t.chatID, t.messageID, SERV_START)
 		t.sendEdit(msg)
 	}

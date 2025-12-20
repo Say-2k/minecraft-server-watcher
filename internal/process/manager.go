@@ -4,7 +4,6 @@ package process
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/exec"
 	"syscall"
@@ -37,15 +36,18 @@ func (m *Manager) Start(parentCtx context.Context, command string) error {
 }
 
 func (m *Manager) Stop() error {
+	if m.cancel != nil {
+		m.cancel()
+	}
+
 	if m.cmd != nil && m.cmd.Process != nil {
 		pgid, err := syscall.Getpgid(m.cmd.Process.Pid)
 		if err != nil {
 			return err
 		}
 
-		// 1. Мягко
 		syscall.Kill(-pgid, syscall.SIGTERM)
-		log.Printf("cmd: %p, process: %p", m.cmd, m.cmd.Process)
+
 		done := make(chan struct{})
 		go func() {
 			_ = m.cmd.Wait()
@@ -54,7 +56,6 @@ func (m *Manager) Stop() error {
 
 		select {
 		case <-done:
-
 			return nil
 		case <-time.After(8 * time.Second):
 			syscall.Kill(-pgid, syscall.SIGKILL)

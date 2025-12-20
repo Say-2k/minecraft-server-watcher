@@ -39,20 +39,20 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 	updateConfig.Timeout = 60
 	updates := tw.notifier.bot.GetUpdatesChan(updateConfig)
 
+	var serverContext context.Context
+	var serverCtxCancel context.CancelFunc
+
 	log.Println("Telegram listener started")
 	for update := range updates {
 		go func() {
 			if update.Message != nil {
-				switch update.Message.Text {
-				case "/start":
+				switch update.Message.Command() {
+				case "start":
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Бот работает!")
 					tw.notifier.bot.Send(msg)
 
-				case "/start_server":
-					if tw.config.AdminIDs == nil || !slices.Contains(tw.config.AdminIDs, update.Message.From.ID) {
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "У вас нет прав для выполнения этой команды.")
-						msg.ReplyToMessageID = update.Message.MessageID
-						tw.notifier.bot.Send(msg)
+				case "start_server":
+					if !isHasAccess(tw, update) {
 						break
 					}
 					if err := tw.manager.Start(ctx, tw.config.Command); err != nil {
@@ -60,18 +60,35 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 						msg.ReplyToMessageID = update.Message.MessageID
 						tw.notifier.bot.Send(msg)
 					} else {
-						tw.notifier.OnStart(ctx)
+						serverContext, serverCtxCancel = context.WithCancel(ctx)
+						tw.notifier.OnStart(serverContext)
 					}
 
-				case "/stop_server":
+				case "stop_server":
+					if !isHasAccess(tw, update) {
+						break
+					}
 					if err := tw.manager.Stop(); err != nil {
 						log.Printf("Ошибка при остановке процесса: %v", err)
+					}
+					if serverCtxCancel != nil {
+						serverCtxCancel()
 					}
 					tw.notifier.OnStop()
 				}
 			}
 		}()
 	}
+}
+
+func isHasAccess(tw *TelegramWorker, update tgbotapi.Update) bool {
+	if tw.config.AdminIDs == nil || !slices.Contains(tw.config.AdminIDs, update.Message.From.ID) {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "У вас нет прав для выполнения этой команды.")
+		msg.ReplyToMessageID = update.Message.MessageID
+		tw.notifier.bot.Send(msg)
+		return false
+	}
+	return true
 }
 
 func (tw *TelegramWorker) Stop() {

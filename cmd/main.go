@@ -36,8 +36,6 @@ func main() {
 		go worker.Listen(ctx)
 	}
 
-	log.Printf("Manager: %p", mgr)
-
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGTERM, syscall.SIGINT)
 	<-sigc
