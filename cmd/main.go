@@ -24,12 +24,14 @@ func main() {
 	var botId string
 	var chatId int64
 	var messageId int
-	if len(os.Args) > 3 {
+	var command string
+	if len(os.Args) > 4 {
 		botId = os.Args[1]
 		if chatId, err = strconv.ParseInt(os.Args[2], 10, 64); err != nil {
 		}
 		if messageId, err = strconv.Atoi(os.Args[3]); err != nil {
 		}
+		command = os.Args[4]
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -45,7 +47,7 @@ func main() {
 	signal.Notify(sigc, syscall.SIGTERM, syscall.SIGINT)
 
 	// === ЗАПУСК СЕРВЕРА ===
-	cmd := exec.CommandContext(ctx, "./run-mine-server.sh")
+	cmd := exec.CommandContext(ctx, command)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
