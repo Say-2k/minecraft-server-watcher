@@ -27,7 +27,7 @@ func main() {
 	var command string
 	if len(os.Args) > 4 {
 		botId = os.Args[1]
-		if chatId, err = strconv.ParseInt(os.Args[2], 10, 64); err != nil {
+		if chatId, err = strconv.ParseInt("-100"+os.Args[2], 10, 64); err != nil {
 		}
 		if messageId, err = strconv.Atoi(os.Args[3]); err != nil {
 		}
