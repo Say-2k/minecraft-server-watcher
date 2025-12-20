@@ -1,3 +1,5 @@
+//go:build linux
+
 package main
 
 import (
@@ -8,8 +10,8 @@ import (
 	"syscall"
 
 	"minecraft-server-watcher/internal/config"
-	"minecraft-server-watcher/internal/notify"
 	"minecraft-server-watcher/internal/process"
+	"minecraft-server-watcher/internal/telegram"
 )
 
 func main() {
@@ -18,24 +20,32 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	notifier := notify.NewTelegram(cfg.BotToken, cfg.ChatID, cfg.MessageID)
+	notifier, err := telegram.NewTelegramNotifier(cfg.BotToken, cfg.ChatID, cfg.MessageID)
+	if err != nil {
+		log.Fatalf("Ошибка создания Telegram notifier: %v", err)
+	} else {
+		log.Println("Бот запущен")
+	}
 
 	mgr := process.NewManager()
-	if err := mgr.Start(ctx, cfg.Command); err != nil {
-		log.Fatalf("Не удалось запустить сервер: %v", err)
-	}
 
-	log.Println("Сервер запущен 🟢")
+	var worker *telegram.TelegramWorker
 
 	if notifier != nil {
-		go notifier.OnStart(ctx)
+		worker = telegram.NewTelegramWorker(&cfg, notifier, mgr)
+		go worker.Listen(ctx)
 	}
+
+	log.Printf("Manager: %p", mgr)
 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGTERM, syscall.SIGINT)
 	<-sigc
 	log.Println("Получен сигнал завершения")
 
+	if worker != nil {
+		worker.Stop()
+	}
 	if notifier != nil {
 		notifier.OnStop()
 	}

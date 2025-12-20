@@ -1,3 +1,5 @@
+//go:build linux
+
 package process
 
 import (
@@ -5,7 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"runtime"
+	"syscall"
 	"time"
 )
 
@@ -23,38 +25,27 @@ func (m *Manager) Start(parentCtx context.Context, command string) error {
 	ctx, cancel := context.WithCancel(parentCtx)
 	m.cancel = cancel
 
-	if runtime.GOOS == "windows" {
-		m.cmd = exec.CommandContext(ctx, "cmd", "/C", command)
-	} else {
-		m.cmd = exec.CommandContext(ctx, "sh", "-c", command)
+	m.cmd = exec.CommandContext(ctx, "sh", "-c", command)
+	m.cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
 	}
-
 	m.cmd.Stdout = os.Stdout
 	m.cmd.Stderr = os.Stderr
 
-	if err := m.cmd.Start(); err != nil {
-		return err
-	}
-
-	go func() {
-		if err := m.cmd.Wait(); err != nil {
-			log.Printf("Процесс завершился с ошибкой: %v", err)
-		} else {
-			log.Println("Процесс завершён")
-		}
-		time.Sleep(100 * time.Millisecond)
-	}()
-
-	return nil
+	err := m.cmd.Start()
+	return err
 }
 
 func (m *Manager) Stop() error {
-	if m.cancel != nil {
-		m.cancel()
-	}
 	if m.cmd != nil && m.cmd.Process != nil {
-		_ = m.cmd.Process.Signal(os.Interrupt)
+		pgid, err := syscall.Getpgid(m.cmd.Process.Pid)
+		if err != nil {
+			return err
+		}
 
+		// 1. Мягко
+		syscall.Kill(-pgid, syscall.SIGTERM)
+		log.Printf("cmd: %p, process: %p", m.cmd, m.cmd.Process)
 		done := make(chan struct{})
 		go func() {
 			_ = m.cmd.Wait()
@@ -63,9 +54,10 @@ func (m *Manager) Stop() error {
 
 		select {
 		case <-done:
+
 			return nil
-		case <-time.After(10 * time.Second):
-			_ = m.cmd.Process.Kill()
+		case <-time.After(8 * time.Second):
+			syscall.Kill(-pgid, syscall.SIGKILL)
 		}
 	}
 	return nil

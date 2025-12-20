@@ -1,7 +1,10 @@
-package notify
+//go:build linux
+
+package telegram
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -20,16 +23,15 @@ type TelegramNotifier struct {
 	messageID int
 }
 
-func NewTelegram(token string, chatID int64, messageID int) *TelegramNotifier {
+func NewTelegramNotifier(token string, chatID int64, messageID int) (*TelegramNotifier, error) {
 	if token == "" {
-		return nil
+		return nil, errors.New("Telegram bot token is empty")
 	}
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
-		log.Printf("Ошибка создания бота: %v", err)
-		return nil
+		return nil, err
 	}
-	return &TelegramNotifier{bot: bot, chatID: chatID, messageID: messageID}
+	return &TelegramNotifier{bot: bot, chatID: chatID, messageID: messageID}, nil
 }
 
 func (t *TelegramNotifier) OnStart(ctx context.Context) {
