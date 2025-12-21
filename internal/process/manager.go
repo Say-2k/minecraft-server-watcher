@@ -4,6 +4,7 @@ package process
 
 import (
 	"context"
+	"log"
 	"os"
 	"os/exec"
 	"syscall"
@@ -11,19 +12,17 @@ import (
 )
 
 type Manager struct {
-	cmd    *exec.Cmd
-	cancel context.CancelFunc
+	cmd       *exec.Cmd
+	isRunning bool
 }
 
 func NewManager() *Manager { return &Manager{} }
 
-func (m *Manager) Start(parentCtx context.Context, command string) error {
+func (m *Manager) Start(ctx context.Context, command string) error {
 	if command == "" {
 		return nil
 	}
-	ctx, cancel := context.WithCancel(parentCtx)
-	m.cancel = cancel
-
+	log.Printf("Запуск команды: %s", command)
 	m.cmd = exec.CommandContext(ctx, "sh", "-c", command)
 	m.cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
@@ -32,14 +31,11 @@ func (m *Manager) Start(parentCtx context.Context, command string) error {
 	m.cmd.Stderr = os.Stderr
 
 	err := m.cmd.Start()
+	m.isRunning = true
 	return err
 }
 
 func (m *Manager) Stop() error {
-	if m.cancel != nil {
-		m.cancel()
-	}
-
 	if m.cmd != nil && m.cmd.Process != nil {
 		pgid, err := syscall.Getpgid(m.cmd.Process.Pid)
 		if err != nil {
@@ -56,10 +52,19 @@ func (m *Manager) Stop() error {
 
 		select {
 		case <-done:
+			m.isRunning = false
 			return nil
 		case <-time.After(8 * time.Second):
 			syscall.Kill(-pgid, syscall.SIGKILL)
+			m.isRunning = false
 		}
 	}
 	return nil
+}
+
+func (m *Manager) IsRunning() (bool, string) {
+	if m.isRunning {
+		return m.isRunning, "Сервер запущен 🟢"
+	}
+	return m.isRunning, "Сервер остановлен 🔴"
 }

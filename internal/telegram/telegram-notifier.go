@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"minecraft-server-watcher/internal/config"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -18,20 +19,19 @@ const (
 )
 
 type TelegramNotifier struct {
-	bot       *tgbotapi.BotAPI
-	chatID    int64
-	messageID int
+	bot    *tgbotapi.BotAPI
+	config *config.Config
 }
 
-func NewTelegramNotifier(token string, chatID int64, messageID int) (*TelegramNotifier, error) {
-	if token == "" {
+func NewTelegramNotifier(config *config.Config) (*TelegramNotifier, error) {
+	if config.BotToken == "" {
 		return nil, errors.New("Telegram bot token is empty")
 	}
-	bot, err := tgbotapi.NewBotAPI(token)
+	bot, err := tgbotapi.NewBotAPI(config.BotToken)
 	if err != nil {
 		return nil, err
 	}
-	return &TelegramNotifier{bot: bot, chatID: chatID, messageID: messageID}, nil
+	return &TelegramNotifier{bot: bot, config: config}, nil
 }
 
 func (t *TelegramNotifier) OnStart(ctx context.Context) {
@@ -39,7 +39,7 @@ func (t *TelegramNotifier) OnStart(ctx context.Context) {
 		return
 	}
 	log.Println("Сообщение через 5 минут будет обновлено на", SERV_START)
-	msg := tgbotapi.NewEditMessageText(t.chatID, t.messageID, SERV_STARTING)
+	msg := tgbotapi.NewEditMessageText(t.config.ChatID, t.config.MessageID, SERV_STARTING)
 	t.sendEdit(msg)
 
 	select {
@@ -47,7 +47,7 @@ func (t *TelegramNotifier) OnStart(ctx context.Context) {
 		log.Println("Контекст отменен до обновления сообщения на", SERV_START)
 		return
 	case <-time.After(5 * time.Minute):
-		msg := tgbotapi.NewEditMessageText(t.chatID, t.messageID, SERV_START)
+		msg := tgbotapi.NewEditMessageText(t.config.ChatID, t.config.MessageID, SERV_START)
 		t.sendEdit(msg)
 	}
 }
@@ -56,7 +56,7 @@ func (t *TelegramNotifier) OnStop() {
 	if t == nil || t.bot == nil {
 		return
 	}
-	msg := tgbotapi.NewEditMessageText(t.chatID, t.messageID, SERV_STOP)
+	msg := tgbotapi.NewEditMessageText(t.config.ChatID, t.config.MessageID, SERV_STOP)
 	t.sendEdit(msg)
 }
 

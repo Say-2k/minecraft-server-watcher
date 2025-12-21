@@ -8,6 +8,7 @@ import (
 	"minecraft-server-watcher/internal/config"
 	"minecraft-server-watcher/internal/process"
 	"slices"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -55,18 +56,27 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 					if !isHasAccess(tw, update) {
 						break
 					}
-					if err := tw.manager.Start(ctx, tw.config.Command); err != nil {
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Не удалось запустить сервер.")
-						msg.ReplyToMessageID = update.Message.MessageID
-						tw.notifier.bot.Send(msg)
+					if isRun, _ := tw.manager.IsRunning(); isRun == true {
+						sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Сервер уже запущен.")
 					} else {
-						serverContext, serverCtxCancel = context.WithCancel(ctx)
-						tw.notifier.OnStart(serverContext)
+						if err := tw.manager.Start(ctx, tw.config.Command); err != nil {
+							sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Не удалось запустить сервер.")
+						} else {
+							serverContext, serverCtxCancel = context.WithCancel(ctx)
+							go tw.notifier.OnStart(serverContext)
+						}
 					}
-
+					deleteMsgComand := tgbotapi.NewDeleteMessage(update.Message.Chat.ID, update.Message.MessageID)
+					go func() {
+						time.Sleep(5 * time.Second)
+						tw.notifier.bot.Send(deleteMsgComand)
+					}()
 				case "stop_server":
 					if !isHasAccess(tw, update) {
 						break
+					}
+					if isRun, _ := tw.manager.IsRunning(); isRun == false {
+						sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Сервер уже остановлен.")
 					}
 					if err := tw.manager.Stop(); err != nil {
 						log.Printf("Ошибка при остановке процесса: %v", err)
@@ -75,6 +85,22 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 						serverCtxCancel()
 					}
 					tw.notifier.OnStop()
+					deleteMsgComand := tgbotapi.NewDeleteMessage(update.Message.Chat.ID, update.Message.MessageID)
+					go func() {
+						time.Sleep(5 * time.Second)
+						tw.notifier.bot.Send(deleteMsgComand)
+					}()
+
+				case "initial_status_message":
+					if !isHasAccess(tw, update) {
+						break
+					}
+					_, statusMsg := tw.manager.IsRunning()
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, statusMsg)
+					newMsg, err := tw.notifier.bot.Send(msg)
+					if err == nil {
+						tw.config.MessageID = newMsg.MessageID
+					}
 				}
 			}
 		}()
@@ -82,13 +108,26 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 }
 
 func isHasAccess(tw *TelegramWorker, update tgbotapi.Update) bool {
-	if tw.config.AdminIDs == nil || !slices.Contains(tw.config.AdminIDs, update.Message.From.ID) {
+	if tw.config.AdminIDs == nil || !slices.Contains(tw.config.AdminIDs, update.Message.From.UserName) {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "У вас нет прав для выполнения этой команды.")
 		msg.ReplyToMessageID = update.Message.MessageID
 		tw.notifier.bot.Send(msg)
 		return false
 	}
 	return true
+}
+
+func sendReplyMessage(bot *tgbotapi.BotAPI, chatID int64, replyToID int, text string) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyToMessageID = replyToID
+	newMsg, err := bot.Send(msg)
+	if err == nil {
+		deleteMsgComand := tgbotapi.NewDeleteMessage(chatID, newMsg.MessageID)
+		go func() {
+			time.Sleep(5 * time.Second)
+			bot.Send(deleteMsgComand)
+		}()
+	}
 }
 
 func (tw *TelegramWorker) Stop() {

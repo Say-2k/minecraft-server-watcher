@@ -20,19 +20,21 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	notifier, err := telegram.NewTelegramNotifier(cfg.BotToken, cfg.ChatID, cfg.MessageID)
+	notifier, err := telegram.NewTelegramNotifier(cfg)
 	if err != nil {
-		log.Fatalf("Ошибка создания Telegram notifier: %v", err)
+		log.Printf("Ошибка создания Telegram notifier: %v", err)
 	} else {
 		log.Println("Бот запущен")
 	}
 
 	mgr := process.NewManager()
+	mgr.Start(ctx, cfg.Command)
+	go notifier.OnStart(ctx)
 
 	var worker *telegram.TelegramWorker
 
 	if notifier != nil {
-		worker = telegram.NewTelegramWorker(&cfg, notifier, mgr)
+		worker = telegram.NewTelegramWorker(cfg, notifier, mgr)
 		go worker.Listen(ctx)
 	}
 
