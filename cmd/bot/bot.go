@@ -9,9 +9,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"minecraft-server-watcher/internal/config"
-	"minecraft-server-watcher/internal/process"
-	"minecraft-server-watcher/internal/telegram"
+	"minecraft-server-watcher/v2/internal/config"
+	"minecraft-server-watcher/v2/internal/process"
+	"minecraft-server-watcher/v2/internal/telegram"
 )
 
 func main() {

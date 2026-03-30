@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package agent.v1;
+
+option go_package = "github.com/Say-2k/minecraft-server-watcher/v2/api/agent/v1;agentpb";
+
+// Message from bot to controller
+message BotMessage {
+    Command command = 1;
+}
+
+// Command represents the type of command sent from the bot to the controller
+enum Command {
+  UNKNOWN = 0;
+  START_SERVER = 1;
+  STOP_SERVER = 2;
+  RESTART_SERVER = 3;
+}
+
+// Message from controller to bot
+message CtlMessage {
+    ServerStatus status = 1;
+}
+
+enum ServerStatus {
+  NONE = 0;
+  SERVER_STATUS_START = 1;
+  SERVER_STATUS_RUNNING = 2;
+  SERVER_STATUS_STOPPING = 3;
+}
+
+// AgentService defines the gRPC service for communication between the bot and the controller
+service AgentService {
+    // Create a bidirectional stream for communication between the bot and the controller
+    rpc Connect(stream BotMessage) returns (stream CtlMessage);
+}

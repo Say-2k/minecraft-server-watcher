@@ -5,8 +5,8 @@ package telegram
 import (
 	"context"
 	"log"
-	"minecraft-server-watcher/internal/config"
-	"minecraft-server-watcher/internal/process"
+	"minecraft-server-watcher/v2/internal/config"
+	"minecraft-server-watcher/v2/internal/process"
 	"slices"
 	"time"
 

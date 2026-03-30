@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"log"
-	"minecraft-server-watcher/internal/config"
+	"minecraft-server-watcher/v2/internal/config"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
