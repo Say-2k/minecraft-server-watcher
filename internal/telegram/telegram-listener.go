@@ -1,5 +1,3 @@
-//go:build linux
-
 package telegram
 
 import (
@@ -47,9 +45,6 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 	updateConfig.Timeout = 60
 	updates := tw.notifier.bot.GetUpdatesChan(updateConfig)
 
-	var serverContext context.Context
-	var serverCtxCancel context.CancelFunc
-
 	log.Println("Telegram listener started")
 	for update := range updates {
 		go func() {
@@ -63,36 +58,38 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 					if !isHasAccess(tw, update) {
 						break
 					}
-					if tw.grpc.lastStatus == agentpb.ServerStatus_RUNNING {
+
+					if tw.grpc.lastStatus == agentpb.ServerStatus_RUNNING || tw.grpc.lastStatus == agentpb.ServerStatus_START {
 						sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Сервер уже запущен.")
+					} else if err := tw.grpc.sendMessage(agentpb.Command_START_SERVER); err != nil {
+						sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Не удалось запустить сервер.")
 					} else {
-						if err := tw.grpc.sendMessage(agentpb.Command_START_SERVER); err != nil {
-							sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Не удалось запустить сервер.")
-						} else {
-							serverContext, serverCtxCancel = context.WithCancel(ctx)
-							go tw.notifier.OnStart(serverContext)
-						}
+						tw.grpc.lastStatus = agentpb.ServerStatus_START
+						go tw.notifier.OnStart()
 					}
+
 					deleteMsgComand := tgbotapi.NewDeleteMessage(update.Message.Chat.ID, update.Message.MessageID)
+
 					go func() {
 						time.Sleep(5 * time.Second)
 						tw.notifier.bot.Send(deleteMsgComand)
 					}()
+
 				case "stop_server":
 					if !isHasAccess(tw, update) {
 						break
 					}
 					if tw.grpc.lastStatus == agentpb.ServerStatus_STOPPING {
 						sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Сервер уже остановлен.")
-					}
-					if err := tw.grpc.sendMessage(agentpb.Command_STOP_SERVER); err != nil {
+					} else if err := tw.grpc.sendMessage(agentpb.Command_STOP_SERVER); err != nil {
 						log.Printf("Ошибка при остановке процесса: %v", err)
+					} else {
+						tw.grpc.lastStatus = agentpb.ServerStatus_STOPPING
+						go tw.notifier.OnStop()
 					}
-					if serverCtxCancel != nil {
-						serverCtxCancel()
-					}
-					tw.notifier.OnStop()
+
 					deleteMsgComand := tgbotapi.NewDeleteMessage(update.Message.Chat.ID, update.Message.MessageID)
+
 					go func() {
 						time.Sleep(5 * time.Second)
 						tw.notifier.bot.Send(deleteMsgComand)

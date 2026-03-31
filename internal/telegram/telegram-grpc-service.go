@@ -5,14 +5,17 @@ import (
 	"net"
 
 	agentpb "minecraft-server-watcher/v2/api/agent/v1"
+	"minecraft-server-watcher/v2/internal/config"
 
 	"google.golang.org/grpc"
 )
 
 type BotServer struct {
 	agentpb.UnimplementedAgentServiceServer
-	botStream  agentpb.AgentService_ConnectServer
-	lastStatus agentpb.ServerStatus
+	botStream        agentpb.AgentService_ConnectServer
+	lastStatus       agentpb.ServerStatus
+	conf             *config.BotConfig
+	telegramNotifier *TelegramNotifier
 }
 
 type Status struct {
@@ -20,21 +23,22 @@ type Status struct {
 	message    string
 }
 
-func NewBotServer() *BotServer {
-	return &BotServer{}
+func NewBotServer(conf *config.BotConfig, tn *TelegramNotifier) *BotServer {
+	return &BotServer{lastStatus: agentpb.ServerStatus_START, conf: conf, telegramNotifier: tn}
 }
 
 func (s *BotServer) Connect(stream agentpb.AgentService_ConnectServer) error {
 	log.Println("New gRPC connection established")
 
-	go reciveMessage(stream)
+	s.botStream = stream
+	go s.reciveMessage()
 
 	select {}
 }
 
-func reciveMessage(stream agentpb.AgentService_ConnectServer) error {
+func (s *BotServer) reciveMessage() error {
 	for {
-		message, err := stream.Recv()
+		message, err := s.botStream.Recv()
 		if err != nil {
 			log.Printf("Error receiving message: %v", err)
 			return err
@@ -43,10 +47,18 @@ func reciveMessage(stream agentpb.AgentService_ConnectServer) error {
 		switch message.Status {
 		case agentpb.ServerStatus_START:
 			log.Println("Received START status")
+			s.telegramNotifier.OnStart()
+			s.lastStatus = agentpb.ServerStatus_START
+
 		case agentpb.ServerStatus_STOPPING:
 			log.Println("Received STOPPING status")
+			s.telegramNotifier.OnStop()
+			s.lastStatus = agentpb.ServerStatus_STOPPING
+
 		case agentpb.ServerStatus_RUNNING:
 			log.Println("Received RUNNING status")
+			s.telegramNotifier.OnRunning()
+			s.lastStatus = agentpb.ServerStatus_RUNNING
 		}
 	}
 }
@@ -63,7 +75,7 @@ func (s *BotServer) sendMessage(msg agentpb.Command) error {
 func (s *BotServer) Start() error {
 	log.Println("Start telegram bot server")
 
-	listner, err := net.Listen("tcp", ":50051")
+	listner, err := net.Listen("tcp", ":"+s.conf.BotPort)
 	if err != nil {
 		log.Printf("Failed to listen: %v", err)
 		return err

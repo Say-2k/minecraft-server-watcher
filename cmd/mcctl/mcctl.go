@@ -1,5 +1,3 @@
-//go:build linux
-
 package main
 
 import (
@@ -14,6 +12,7 @@ import (
 	"minecraft-server-watcher/v2/internal/process"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
@@ -31,7 +30,7 @@ func main() {
 		botPort = "50051"
 	}
 
-	connect, err := grpc.NewClient(botHost + ":" + botPort)
+	connect, err := grpc.NewClient(botHost+":"+botPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Printf("Ошибка создания gRPC клиента: %v", err)
 	}
@@ -50,7 +49,10 @@ func main() {
 	}
 
 	mgr := process.NewManager()
-	mgr.Start(ctx, cfg.Command)
+	mgr.Stream = stream
+	mgr.Cfg = cfg
+	mgr.Start(ctx)
+	go process.Listen(mgr)
 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGTERM, syscall.SIGINT)

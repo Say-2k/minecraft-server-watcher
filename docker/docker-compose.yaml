@@ -1,0 +1,38 @@
+version: "3.8"
+
+name: minecraft-server-with-bot
+
+services:
+  bot:
+    build:
+      context: ..
+      dockerfile: docker/bot.Dockerfile
+      args:
+        BOT_ARTIFACT_PATH: artifacts/bot
+    container_name: bot
+    restart: unless-stopped
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      CHAT_ID: ${CHAT_ID}
+      MESSAGE_ID: ${MESSAGE_ID}
+      ADMIN_IDS: ${ADMIN_IDS}
+      BOT_PORT: ${BOT_PORT}
+
+  mcctl:
+    build:
+      context: ..
+      dockerfile: docker/mcctl.Dockerfile
+      args:
+        ARTIFACT_PATH: artifacts/mcctl
+    container_name: mcctl
+    restart: unless-stopped
+    ports:
+      - "25521:25521"
+    volumes:
+      - ../../mine-server:/minecraft
+    environment:
+      BOT_HOST: bot
+      BOT_PORT: ${BOT_PORT}
+    depends_on:
+      - bot
+    command: ["./mcctl", "./run-mine-server.sh"]

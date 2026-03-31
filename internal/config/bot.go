@@ -13,9 +13,10 @@ type BotConfig struct {
 	MessageID        int
 	AdminIDs         []string
 	SendFirstMessage bool
+	BotPort          string
 }
 
-// LoadBotConfigFromEnv expects: <prog> BOT_TOKEN CHAT_ID MESSAGE_ID ADMIN_IDS
+// LoadBotConfigFromEnv загружает конфигурацию бота из переменных окружения и возвращает указатель на структуру BotConfig.
 func LoadBotConfigFromEnv() *BotConfig {
 	var cfg BotConfig
 
@@ -34,9 +35,10 @@ func LoadBotConfigFromEnv() *BotConfig {
 	}
 
 	if messageId, ok := os.LookupEnv("MESSAGE_ID"); ok {
-		log.Printf("Ошибка загрузки MESSAGE_ID из переменных окружения")
 		if v, err := strconv.Atoi(messageId); err == nil {
 			cfg.MessageID = v
+		} else {
+			log.Printf("Ошибка загрузки MESSAGE_ID из переменных окружения")
 		}
 	}
 
@@ -50,6 +52,13 @@ func LoadBotConfigFromEnv() *BotConfig {
 
 	if os.Getenv("SEND_FIRST_MESSAGE") == "true" {
 		cfg.SendFirstMessage = true
+	}
+
+	if botPort, ok := os.LookupEnv("BOT_PORT"); ok {
+		cfg.BotPort = botPort
+	} else {
+		log.Printf("Ошибка загрузки BOT_PORT из переменных окружения, используется значение по умолчанию: 50051")
+		cfg.BotPort = "50051"
 	}
 
 	return &cfg

@@ -25,9 +25,8 @@ func main() {
 	} else {
 		log.Println("Бот запущен")
 	}
-	go notifier.OnStart(ctx)
 
-	grpcServer := telegram.NewBotServer()
+	grpcServer := telegram.NewBotServer(cfg, notifier)
 	go func() {
 		if err := grpcServer.Start(); err != nil {
 			log.Printf("Ошибка запуска gRPC сервера: %v", err)
