@@ -61,10 +61,3 @@ func (m *Manager) Stop() error {
 	}
 	return nil
 }
-
-func (m *Manager) IsRunning() (bool, string) {
-	if m.isRunning {
-		return m.isRunning, "Сервер запущен 🟢"
-	}
-	return m.isRunning, "Сервер остановлен 🔴"
-}

@@ -29,7 +29,7 @@ const (
 // AgentService defines the gRPC service for communication between the bot and the controller
 type AgentServiceClient interface {
 	// Create a bidirectional stream for communication between the bot and the controller
-	Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[BotMessage, CtlMessage], error)
+	Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[CtlMessage, BotMessage], error)
 }
 
 type agentServiceClient struct {
@@ -40,18 +40,18 @@ func NewAgentServiceClient(cc grpc.ClientConnInterface) AgentServiceClient {
 	return &agentServiceClient{cc}
 }
 
-func (c *agentServiceClient) Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[BotMessage, CtlMessage], error) {
+func (c *agentServiceClient) Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[CtlMessage, BotMessage], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[0], AgentService_Connect_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[BotMessage, CtlMessage]{ClientStream: stream}
+	x := &grpc.GenericClientStream[CtlMessage, BotMessage]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type AgentService_ConnectClient = grpc.BidiStreamingClient[BotMessage, CtlMessage]
+type AgentService_ConnectClient = grpc.BidiStreamingClient[CtlMessage, BotMessage]
 
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
@@ -60,7 +60,7 @@ type AgentService_ConnectClient = grpc.BidiStreamingClient[BotMessage, CtlMessag
 // AgentService defines the gRPC service for communication between the bot and the controller
 type AgentServiceServer interface {
 	// Create a bidirectional stream for communication between the bot and the controller
-	Connect(grpc.BidiStreamingServer[BotMessage, CtlMessage]) error
+	Connect(grpc.BidiStreamingServer[CtlMessage, BotMessage]) error
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -71,7 +71,7 @@ type AgentServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAgentServiceServer struct{}
 
-func (UnimplementedAgentServiceServer) Connect(grpc.BidiStreamingServer[BotMessage, CtlMessage]) error {
+func (UnimplementedAgentServiceServer) Connect(grpc.BidiStreamingServer[CtlMessage, BotMessage]) error {
 	return status.Error(codes.Unimplemented, "method Connect not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
@@ -96,11 +96,11 @@ func RegisterAgentServiceServer(s grpc.ServiceRegistrar, srv AgentServiceServer)
 }
 
 func _AgentService_Connect_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(AgentServiceServer).Connect(&grpc.GenericServerStream[BotMessage, CtlMessage]{ServerStream: stream})
+	return srv.(AgentServiceServer).Connect(&grpc.GenericServerStream[CtlMessage, BotMessage]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type AgentService_ConnectServer = grpc.BidiStreamingServer[BotMessage, CtlMessage]
+type AgentService_ConnectServer = grpc.BidiStreamingServer[CtlMessage, BotMessage]
 
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,

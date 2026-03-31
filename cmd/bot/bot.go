@@ -10,12 +10,11 @@ import (
 	"syscall"
 
 	"minecraft-server-watcher/v2/internal/config"
-	"minecraft-server-watcher/v2/internal/process"
 	"minecraft-server-watcher/v2/internal/telegram"
 )
 
 func main() {
-	cfg := config.LoadFromArgs(os.Args)
+	cfg := config.LoadBotConfigFromEnv()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -26,15 +25,19 @@ func main() {
 	} else {
 		log.Println("Бот запущен")
 	}
-
-	mgr := process.NewManager()
-	mgr.Start(ctx, cfg.Command)
 	go notifier.OnStart(ctx)
+
+	grpcServer := telegram.NewBotServer()
+	go func() {
+		if err := grpcServer.Start(); err != nil {
+			log.Printf("Ошибка запуска gRPC сервера: %v", err)
+		}
+	}()
 
 	var worker *telegram.TelegramWorker
 
 	if notifier != nil {
-		worker = telegram.NewTelegramWorker(cfg, notifier, mgr)
+		worker = telegram.NewTelegramWorker(cfg, notifier, grpcServer)
 		go worker.Listen(ctx)
 	}
 
@@ -50,9 +53,5 @@ func main() {
 		notifier.OnStop()
 	}
 
-	if err := mgr.Stop(); err != nil {
-		log.Printf("Ошибка при остановке процесса: %v", err)
-	}
-
-	log.Println("Сервер остановлен 🔴")
+	log.Println("Бот остановлен")
 }

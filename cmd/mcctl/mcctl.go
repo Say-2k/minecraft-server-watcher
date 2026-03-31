@@ -9,47 +9,58 @@ import (
 	"os/signal"
 	"syscall"
 
+	agentpb "minecraft-server-watcher/v2/api/agent/v1"
 	"minecraft-server-watcher/v2/internal/config"
 	"minecraft-server-watcher/v2/internal/process"
-	"minecraft-server-watcher/v2/internal/telegram"
+
+	"google.golang.org/grpc"
 )
 
 func main() {
-	cfg := config.LoadFromArgs(os.Args)
+	cfg := config.LoadCtlConfigFromArgs(os.Args)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	notifier, err := telegram.NewTelegramNotifier(cfg)
+	botHost, exists := os.LookupEnv("BOT_HOST")
+	if !exists {
+		botHost = "localhost"
+	}
+	botPort, exists := os.LookupEnv("BOT_PORT")
+	if !exists {
+		botPort = "50051"
+	}
+
+	connect, err := grpc.NewClient(botHost + ":" + botPort)
 	if err != nil {
-		log.Printf("Ошибка создания Telegram notifier: %v", err)
-	} else {
-		log.Println("Бот запущен")
+		log.Printf("Ошибка создания gRPC клиента: %v", err)
+	}
+
+	defer connect.Close()
+
+	client := agentpb.NewAgentServiceClient(connect)
+	stream, err := client.Connect(ctx)
+	if err != nil {
+		log.Printf("Ошибка подключения к gRPC серверу: %v", err)
+	}
+
+	err = stream.Send(&agentpb.CtlMessage{Status: agentpb.ServerStatus_START})
+	if err != nil {
+		log.Printf("Ошибка отправки сообщения: %v", err)
 	}
 
 	mgr := process.NewManager()
 	mgr.Start(ctx, cfg.Command)
-	go notifier.OnStart(ctx)
-
-	var worker *telegram.TelegramWorker
-
-	if notifier != nil {
-		worker = telegram.NewTelegramWorker(cfg, notifier, mgr)
-		go worker.Listen(ctx)
-	}
 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGTERM, syscall.SIGINT)
 	<-sigc
 	log.Println("Получен сигнал завершения")
 
-	if worker != nil {
-		worker.Stop()
+	err = stream.Send(&agentpb.CtlMessage{Status: agentpb.ServerStatus_STOPPING})
+	if err != nil {
+		log.Printf("Ошибка отправки сообщения: %v", err)
 	}
-	if notifier != nil {
-		notifier.OnStop()
-	}
-
 	if err := mgr.Stop(); err != nil {
 		log.Printf("Ошибка при остановке процесса: %v", err)
 	}

@@ -77,25 +77,25 @@ func (Command) EnumDescriptor() ([]byte, []int) {
 type ServerStatus int32
 
 const (
-	ServerStatus_NONE                   ServerStatus = 0
-	ServerStatus_SERVER_STATUS_START    ServerStatus = 1
-	ServerStatus_SERVER_STATUS_RUNNING  ServerStatus = 2
-	ServerStatus_SERVER_STATUS_STOPPING ServerStatus = 3
+	ServerStatus_NONE     ServerStatus = 0
+	ServerStatus_START    ServerStatus = 1
+	ServerStatus_RUNNING  ServerStatus = 2
+	ServerStatus_STOPPING ServerStatus = 3
 )
 
 // Enum value maps for ServerStatus.
 var (
 	ServerStatus_name = map[int32]string{
 		0: "NONE",
-		1: "SERVER_STATUS_START",
-		2: "SERVER_STATUS_RUNNING",
-		3: "SERVER_STATUS_STOPPING",
+		1: "START",
+		2: "RUNNING",
+		3: "STOPPING",
 	}
 	ServerStatus_value = map[string]int32{
-		"NONE":                   0,
-		"SERVER_STATUS_START":    1,
-		"SERVER_STATUS_RUNNING":  2,
-		"SERVER_STATUS_STOPPING": 3,
+		"NONE":     0,
+		"START":    1,
+		"RUNNING":  2,
+		"STOPPING": 3,
 	}
 )
 
@@ -231,14 +231,14 @@ const file_api_agent_v1_agent_proto_rawDesc = "" +
 	"\aUNKNOWN\x10\x00\x12\x10\n" +
 	"\fSTART_SERVER\x10\x01\x12\x0f\n" +
 	"\vSTOP_SERVER\x10\x02\x12\x12\n" +
-	"\x0eRESTART_SERVER\x10\x03*h\n" +
+	"\x0eRESTART_SERVER\x10\x03*>\n" +
 	"\fServerStatus\x12\b\n" +
-	"\x04NONE\x10\x00\x12\x17\n" +
-	"\x13SERVER_STATUS_START\x10\x01\x12\x19\n" +
-	"\x15SERVER_STATUS_RUNNING\x10\x02\x12\x1a\n" +
-	"\x16SERVER_STATUS_STOPPING\x10\x032I\n" +
+	"\x04NONE\x10\x00\x12\t\n" +
+	"\x05START\x10\x01\x12\v\n" +
+	"\aRUNNING\x10\x02\x12\f\n" +
+	"\bSTOPPING\x10\x032I\n" +
 	"\fAgentService\x129\n" +
-	"\aConnect\x12\x14.agent.v1.BotMessage\x1a\x14.agent.v1.CtlMessage(\x010\x01BDZBgithub.com/Say-2k/minecraft-server-watcher/v2/api/agent/v1;agentpbb\x06proto3"
+	"\aConnect\x12\x14.agent.v1.CtlMessage\x1a\x14.agent.v1.BotMessage(\x010\x01BDZBgithub.com/Say-2k/minecraft-server-watcher/v2/api/agent/v1;agentpbb\x06proto3"
 
 var (
 	file_api_agent_v1_agent_proto_rawDescOnce sync.Once
@@ -263,8 +263,8 @@ var file_api_agent_v1_agent_proto_goTypes = []any{
 var file_api_agent_v1_agent_proto_depIdxs = []int32{
 	0, // 0: agent.v1.BotMessage.command:type_name -> agent.v1.Command
 	1, // 1: agent.v1.CtlMessage.status:type_name -> agent.v1.ServerStatus
-	2, // 2: agent.v1.AgentService.Connect:input_type -> agent.v1.BotMessage
-	3, // 3: agent.v1.AgentService.Connect:output_type -> agent.v1.CtlMessage
+	3, // 2: agent.v1.AgentService.Connect:input_type -> agent.v1.CtlMessage
+	2, // 3: agent.v1.AgentService.Connect:output_type -> agent.v1.BotMessage
 	3, // [3:4] is the sub-list for method output_type
 	2, // [2:3] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name

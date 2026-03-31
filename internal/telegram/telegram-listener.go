@@ -5,30 +5,37 @@ package telegram
 import (
 	"context"
 	"log"
-	"minecraft-server-watcher/v2/internal/config"
-	"minecraft-server-watcher/v2/internal/process"
 	"slices"
 	"time"
+
+	agentpb "minecraft-server-watcher/v2/api/agent/v1"
+	"minecraft-server-watcher/v2/internal/config"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type TelegramWorker struct {
-	config     *config.Config
+	config     *config.BotConfig
 	notifier   *TelegramNotifier
-	manager    *process.Manager
+	grpc       *BotServer
 	cancelFunc context.CancelFunc
 }
 
-func NewTelegramWorker(cfg *config.Config, notifier *TelegramNotifier, mgr *process.Manager) *TelegramWorker {
+func NewTelegramWorker(cfg *config.BotConfig, notifier *TelegramNotifier, grpc *BotServer) *TelegramWorker {
 	return &TelegramWorker{
 		config:   cfg,
 		notifier: notifier,
-		manager:  mgr,
+		grpc:     grpc,
 	}
 }
 
 func (tw *TelegramWorker) Listen(ctx context.Context) {
+	msgMapping := map[agentpb.ServerStatus]string{
+		agentpb.ServerStatus_RUNNING:  "Сервер запущен 🟢",
+		agentpb.ServerStatus_STOPPING: "Сервер остановлен 🔴",
+		agentpb.ServerStatus_START:    "Сервер запускается 🟡",
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	tw.cancelFunc = cancel
 
@@ -56,10 +63,10 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 					if !isHasAccess(tw, update) {
 						break
 					}
-					if isRun, _ := tw.manager.IsRunning(); isRun == true {
+					if tw.grpc.lastStatus == agentpb.ServerStatus_RUNNING {
 						sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Сервер уже запущен.")
 					} else {
-						if err := tw.manager.Start(ctx, tw.config.Command); err != nil {
+						if err := tw.grpc.sendMessage(agentpb.Command_START_SERVER); err != nil {
 							sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Не удалось запустить сервер.")
 						} else {
 							serverContext, serverCtxCancel = context.WithCancel(ctx)
@@ -75,10 +82,10 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 					if !isHasAccess(tw, update) {
 						break
 					}
-					if isRun, _ := tw.manager.IsRunning(); isRun == false {
+					if tw.grpc.lastStatus == agentpb.ServerStatus_STOPPING {
 						sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Сервер уже остановлен.")
 					}
-					if err := tw.manager.Stop(); err != nil {
+					if err := tw.grpc.sendMessage(agentpb.Command_STOP_SERVER); err != nil {
 						log.Printf("Ошибка при остановке процесса: %v", err)
 					}
 					if serverCtxCancel != nil {
@@ -95,7 +102,7 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 					if !isHasAccess(tw, update) {
 						break
 					}
-					_, statusMsg := tw.manager.IsRunning()
+					statusMsg := msgMapping[tw.grpc.lastStatus]
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, statusMsg)
 					newMsg, err := tw.notifier.bot.Send(msg)
 					if err == nil {

@@ -20,10 +20,10 @@ const (
 
 type TelegramNotifier struct {
 	bot    *tgbotapi.BotAPI
-	config *config.Config
+	config *config.BotConfig
 }
 
-func NewTelegramNotifier(config *config.Config) (*TelegramNotifier, error) {
+func NewTelegramNotifier(config *config.BotConfig) (*TelegramNotifier, error) {
 	if config.BotToken == "" {
 		return nil, errors.New("Telegram bot token is empty")
 	}
