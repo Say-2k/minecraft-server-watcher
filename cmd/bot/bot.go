@@ -1,5 +1,3 @@
-//go:build linux
-
 package main
 
 import (
@@ -22,22 +20,31 @@ func main() {
 	notifier, err := telegram.NewTelegramNotifier(cfg)
 	if err != nil {
 		log.Printf("Ошибка создания Telegram notifier: %v", err)
+		return
 	} else {
 		log.Println("Бот запущен")
 	}
 
-	grpcServer := telegram.NewBotServer(cfg, notifier)
-	go func() {
-		if err := grpcServer.Start(); err != nil {
-			log.Printf("Ошибка запуска gRPC сервера: %v", err)
-		}
-	}()
+	grpcServer, err := telegram.NewBotServer(cfg, notifier)
+	if err != nil {
+		log.Printf("Ошибка создания gRPC сервера: %v", err)
+		return
+	}
 
-	var worker *telegram.TelegramWorker
+	if err := grpcServer.Start(); err != nil {
+		log.Printf("Ошибка запуска gRPC сервера: %v", err)
+		return
+	}
+
+	var worker telegram.ITelegramWorker
 
 	if notifier != nil {
-		worker = telegram.NewTelegramWorker(cfg, notifier, grpcServer)
-		go worker.Listen(ctx)
+		worker, err = telegram.NewTelegramWorker(cfg, notifier, grpcServer)
+		if err != nil {
+			log.Printf("Ошибка создания Telegram worker: %v", err)
+		} else {
+			go worker.Listen(ctx)
+		}
 	}
 
 	sigc := make(chan os.Signal, 1)
@@ -51,6 +58,7 @@ func main() {
 	if notifier != nil {
 		notifier.OnStop()
 	}
+	grpcServer.Disconnect()
 
 	log.Println("Бот остановлен")
 }

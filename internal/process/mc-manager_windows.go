@@ -12,13 +12,36 @@ import (
 )
 
 type Manager struct {
-	Cfg       *config.CtlConfig
+	cfg       *config.CtlConfig
 	cmd       *exec.Cmd
 	isRunning bool
-	Stream    grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage]
+	stream    grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage]
+}
+
+type IManager interface {
+	Start(ctx context.Context) error
+	Stop() error
+	GetStream() grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage]
+	SetStream(stream grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage])
+	GetCfg() *config.CtlConfig
+	SetCfg(cfg *config.CtlConfig)
 }
 
 func NewManager() *Manager { return &Manager{} }
+
+func (m *Manager) GetStream() grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage] {
+	return nil
+}
+
+func (m *Manager) SetStream(stream grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage]) {
+}
+
+func (m *Manager) GetCfg() *config.CtlConfig {
+	return nil
+}
+
+func (m *Manager) SetCfg(cfg *config.CtlConfig) {
+}
 
 func (m *Manager) Start(ctx context.Context) error {
 	return nil

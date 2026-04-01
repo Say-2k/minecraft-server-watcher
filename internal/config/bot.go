@@ -27,7 +27,9 @@ func LoadBotConfigFromEnv() *BotConfig {
 	cfg.BotToken = botToken
 
 	if chatId, ok := os.LookupEnv("CHAT_ID"); ok {
-		if v, err := strconv.ParseInt("-100"+chatId, 10, 64); err == nil {
+		if v, err := strconv.ParseInt(chatId, 10, 64); err == nil && len(chatId) > 9 && chatId[:2] == "-100" {
+			cfg.ChatID = v
+		} else if v, err := strconv.ParseInt("-100"+chatId, 10, 64); err == nil {
 			cfg.ChatID = v
 		} else {
 			log.Printf("Ошибка загрузки CHAT_ID из переменных окружения")
@@ -45,9 +47,7 @@ func LoadBotConfigFromEnv() *BotConfig {
 	if adminIds, ok := os.LookupEnv("ADMIN_IDS"); ok {
 		massAdminIDs := strings.Split(adminIds, ",")
 		cfg.AdminIDs = make([]string, len(massAdminIDs))
-		for _, idStr := range massAdminIDs {
-			cfg.AdminIDs = append(cfg.AdminIDs, idStr)
-		}
+		copy(cfg.AdminIDs, massAdminIDs)
 	}
 
 	if os.Getenv("SEND_FIRST_MESSAGE") == "true" {

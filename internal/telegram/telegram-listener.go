@@ -2,8 +2,10 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"slices"
+	"strconv"
 	"time"
 
 	agentpb "minecraft-server-watcher/v2/api/agent/v1"
@@ -14,17 +16,31 @@ import (
 
 type TelegramWorker struct {
 	config     *config.BotConfig
-	notifier   *TelegramNotifier
-	grpc       *BotServer
+	notifier   ITelegramNotifier
+	grpc       IBotServer
 	cancelFunc context.CancelFunc
 }
 
-func NewTelegramWorker(cfg *config.BotConfig, notifier *TelegramNotifier, grpc *BotServer) *TelegramWorker {
+type ITelegramWorker interface {
+	Listen(ctx context.Context)
+	Stop()
+}
+
+func NewTelegramWorker(cfg *config.BotConfig, notifier ITelegramNotifier, grpc IBotServer) (ITelegramWorker, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("BotConfig is nil")
+	}
+	if notifier == nil {
+		return nil, fmt.Errorf("TelegramNotifier is nil")
+	}
+	if grpc == nil {
+		return nil, fmt.Errorf("gRPC server is nil")
+	}
 	return &TelegramWorker{
 		config:   cfg,
 		notifier: notifier,
 		grpc:     grpc,
-	}
+	}, nil
 }
 
 func (tw *TelegramWorker) Listen(ctx context.Context) {
@@ -37,85 +53,89 @@ func (tw *TelegramWorker) Listen(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	tw.cancelFunc = cancel
 
-	if tw.notifier != nil && tw.notifier.bot != nil {
-		_, _ = tw.notifier.bot.Request(tgbotapi.DeleteWebhookConfig{})
+	if tw.notifier != nil && tw.notifier.GetBot() != nil {
+		_, _ = tw.notifier.GetBot().Request(tgbotapi.DeleteWebhookConfig{})
 	}
 
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = 60
-	updates := tw.notifier.bot.GetUpdatesChan(updateConfig)
+	updates := tw.notifier.GetBot().GetUpdatesChan(updateConfig)
 
 	log.Println("Telegram listener started")
-	for update := range updates {
-		go func() {
-			if update.Message != nil {
-				switch update.Message.Command() {
-				case "start":
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Бот работает!")
-					tw.notifier.bot.Send(msg)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Telegram listener stopped")
+			return
+		case update := <-updates:
+			go func(upd tgbotapi.Update) {
+				if upd.Message != nil {
+					switch upd.Message.Command() {
+					case "start":
+						msg := tgbotapi.NewMessage(upd.Message.Chat.ID, "Бот работает!")
+						tw.notifier.GetBot().Send(msg)
 
-				case "start_server":
-					if !isHasAccess(tw, update) {
-						break
-					}
+					case "start_server":
+						if !isHasAccess(tw, upd) {
+							break
+						}
 
-					if tw.grpc.lastStatus == agentpb.ServerStatus_RUNNING || tw.grpc.lastStatus == agentpb.ServerStatus_START {
-						sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Сервер уже запущен.")
-					} else if err := tw.grpc.sendMessage(agentpb.Command_START_SERVER); err != nil {
-						sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Не удалось запустить сервер.")
-					} else {
-						tw.grpc.lastStatus = agentpb.ServerStatus_START
-						go tw.notifier.OnStart()
-					}
+						if tw.grpc.GetLastStatus() == agentpb.ServerStatus_RUNNING || tw.grpc.GetLastStatus() == agentpb.ServerStatus_START {
+							sendReplyMessage(tw.notifier.GetBot(), upd.Message.Chat.ID, upd.Message.MessageID, "Сервер уже запущен.")
+						} else if err := tw.grpc.SendMessage(agentpb.Command_START_SERVER); err != nil {
+							sendReplyMessage(tw.notifier.GetBot(), upd.Message.Chat.ID, upd.Message.MessageID, "Не удалось запустить сервер.")
+						} else {
+							go tw.notifier.OnStart()
+						}
 
-					deleteMsgComand := tgbotapi.NewDeleteMessage(update.Message.Chat.ID, update.Message.MessageID)
+						deleteMsgComand := tgbotapi.NewDeleteMessage(upd.Message.Chat.ID, upd.Message.MessageID)
 
-					go func() {
-						time.Sleep(5 * time.Second)
-						tw.notifier.bot.Send(deleteMsgComand)
-					}()
+						go func() {
+							time.Sleep(5 * time.Second)
+							tw.notifier.GetBot().Send(deleteMsgComand)
+						}()
 
-				case "stop_server":
-					if !isHasAccess(tw, update) {
-						break
-					}
-					if tw.grpc.lastStatus == agentpb.ServerStatus_STOPPING {
-						sendReplyMessage(tw.notifier.bot, update.Message.Chat.ID, update.Message.MessageID, "Сервер уже остановлен.")
-					} else if err := tw.grpc.sendMessage(agentpb.Command_STOP_SERVER); err != nil {
-						log.Printf("Ошибка при остановке процесса: %v", err)
-					} else {
-						tw.grpc.lastStatus = agentpb.ServerStatus_STOPPING
-						go tw.notifier.OnStop()
-					}
+					case "stop_server":
+						if !isHasAccess(tw, upd) {
+							break
+						}
+						if tw.grpc.GetLastStatus() == agentpb.ServerStatus_STOPPING {
+							sendReplyMessage(tw.notifier.GetBot(), upd.Message.Chat.ID, upd.Message.MessageID, "Сервер уже остановлен.")
+						} else if err := tw.grpc.SendMessage(agentpb.Command_STOP_SERVER); err != nil {
+							log.Printf("Ошибка при остановке процесса: %v", err)
+						} else {
+							go tw.notifier.OnStop()
+						}
 
-					deleteMsgComand := tgbotapi.NewDeleteMessage(update.Message.Chat.ID, update.Message.MessageID)
+						deleteMsgComand := tgbotapi.NewDeleteMessage(upd.Message.Chat.ID, upd.Message.MessageID)
 
-					go func() {
-						time.Sleep(5 * time.Second)
-						tw.notifier.bot.Send(deleteMsgComand)
-					}()
+						go func() {
+							time.Sleep(5 * time.Second)
+							tw.notifier.GetBot().Send(deleteMsgComand)
+						}()
 
-				case "initial_status_message":
-					if !isHasAccess(tw, update) {
-						break
-					}
-					statusMsg := msgMapping[tw.grpc.lastStatus]
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, statusMsg)
-					newMsg, err := tw.notifier.bot.Send(msg)
-					if err == nil {
-						tw.config.MessageID = newMsg.MessageID
+					case "initial_status_message":
+						if !isHasAccess(tw, upd) {
+							break
+						}
+						statusMsg := msgMapping[tw.grpc.GetLastStatus()]
+						msg := tgbotapi.NewMessage(upd.Message.Chat.ID, statusMsg)
+						newMsg, err := tw.notifier.GetBot().Send(msg)
+						if err == nil {
+							tw.config.MessageID = newMsg.MessageID
+						}
 					}
 				}
-			}
-		}()
+			}(update)
+		}
 	}
 }
 
 func isHasAccess(tw *TelegramWorker, update tgbotapi.Update) bool {
-	if tw.config.AdminIDs == nil || !slices.Contains(tw.config.AdminIDs, update.Message.From.UserName) {
+	if tw.config.AdminIDs == nil || !slices.Contains(tw.config.AdminIDs, strconv.Itoa(int(update.Message.From.ID))) {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "У вас нет прав для выполнения этой команды.")
 		msg.ReplyToMessageID = update.Message.MessageID
-		tw.notifier.bot.Send(msg)
+		tw.notifier.GetBot().Send(msg)
 		return false
 	}
 	return true

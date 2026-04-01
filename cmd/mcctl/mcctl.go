@@ -49,8 +49,8 @@ func main() {
 	}
 
 	mgr := process.NewManager()
-	mgr.Stream = stream
-	mgr.Cfg = cfg
+	mgr.SetStream(stream)
+	mgr.SetCfg(cfg)
 	mgr.Start(ctx)
 	go process.Listen(mgr)
 
@@ -63,6 +63,7 @@ func main() {
 	if err != nil {
 		log.Printf("Ошибка отправки сообщения: %v", err)
 	}
+
 	if err := mgr.Stop(); err != nil {
 		log.Printf("Ошибка при остановке процесса: %v", err)
 	}

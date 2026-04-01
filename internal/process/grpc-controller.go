@@ -8,9 +8,9 @@ import (
 	agentpb "minecraft-server-watcher/v2/api/agent/v1"
 )
 
-func Listen(m *Manager) {
+func Listen(m IManager) {
 	for {
-		msgStream, err := m.Stream.Recv()
+		msgStream, err := m.GetStream().Recv()
 
 		if err != nil {
 			if errors.Is(err, io.EOF) {

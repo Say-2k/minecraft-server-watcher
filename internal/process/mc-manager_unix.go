@@ -16,20 +16,45 @@ import (
 )
 
 type Manager struct {
-	Cfg       *config.CtlConfig
+	cfg       *config.CtlConfig
 	cmd       *exec.Cmd
 	isRunning bool
-	Stream    grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage]
+	stream    grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage]
+}
+
+type IManager interface {
+	Start(ctx context.Context) error
+	Stop() error
+	GetStream() grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage]
+	SetStream(stream grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage])
+	GetCfg() *config.CtlConfig
+	SetCfg(cfg *config.CtlConfig)
 }
 
 func NewManager() *Manager { return &Manager{} }
 
+func (m *Manager) GetStream() grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage] {
+	return m.stream
+}
+
+func (m *Manager) SetStream(stream grpc.BidiStreamingClient[agentpb.CtlMessage, agentpb.BotMessage]) {
+	m.stream = stream
+}
+
+func (m *Manager) GetCfg() *config.CtlConfig {
+	return m.cfg
+}
+
+func (m *Manager) SetCfg(cfg *config.CtlConfig) {
+	m.cfg = cfg
+}
+
 func (m *Manager) Start(ctx context.Context) error {
-	if m.Cfg.Command == "" {
+	if m.cfg.Command == "" {
 		return nil
 	}
-	log.Printf("Запуск команды: %s", m.Cfg.Command)
-	m.cmd = exec.CommandContext(ctx, "sh", "-c", m.Cfg.Command)
+	log.Printf("Запуск команды: %s", m.cfg.Command)
+	m.cmd = exec.CommandContext(ctx, "sh", "-c", m.cfg.Command)
 	m.cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}
@@ -37,7 +62,11 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.cmd.Stderr = os.Stderr
 
 	err := m.cmd.Start()
-	log.Printf("Сервер запущен: %s %d", m.Cfg.Command, m.cmd.Process.Pid)
+	if err != nil {
+		log.Printf("Ошибка при запуске команды: %v", err)
+		return err
+	}
+	log.Printf("Сервер запущен: %s", m.cfg.Command)
 	m.isRunning = true
 
 	go func() {
@@ -54,9 +83,9 @@ func (m *Manager) Start(ctx context.Context) error {
 }
 
 func (m *Manager) Stop() error {
-	log.Printf("Остановка команды: %s %d", m.Cfg.Command, m.cmd.Process.Pid)
-
 	if m.cmd != nil && m.cmd.Process != nil {
+		log.Printf("Остановка команды: %s %d", m.cfg.Command, m.cmd.Process.Pid)
+
 		pgid, err := syscall.Getpgid(m.cmd.Process.Pid)
 		if err != nil {
 			return err
@@ -85,8 +114,8 @@ func (m *Manager) Stop() error {
 }
 
 func (m *Manager) sendStatus(status agentpb.ServerStatus) {
-	if m.Stream != nil {
-		err := m.Stream.Send(&agentpb.CtlMessage{Status: status})
+	if m.stream != nil {
+		err := m.stream.Send(&agentpb.CtlMessage{Status: status})
 		if err != nil {
 			log.Printf("Ошибка при отправке статуса: %v", err)
 		}
